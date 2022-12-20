@@ -1,0 +1,111 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "id": "http://www.bluetooth.com/specifications/assigned-numbers/mesh-profile/cdb-schema.json#",
+    "version": "1.0.0",
+    "meshUUID": "8215F17A-9BA1-4A63-B099-A68A9B3685FA",
+    "meshName": "nRF Mesh Network",
+    "timestamp": "2022-12-08T14:05:02+07:00",
+    "partial": false,
+    "netKeys": [
+        {
+            "name": "Network Key 1",
+            "index": 0,
+            "key": "A0682F868AE1BD3835DD5D46AC808D70",
+            "phase": 0,
+            "minSecurity": "insecure",
+            "timestamp": "2022-12-08T14:05:02+07:00"
+        }
+    ],
+    "appKeys": [
+        {
+            "name": "Application Key 1",
+            "index": 0,
+            "boundNetKey": 0,
+            "key": "6296316B381256A2CD8B584F33D8ECD5"
+        }
+    ],
+    "provisioners": [
+        {
+            "provisionerName": "nRF Mesh Provisioner",
+            "UUID": "8BE6C84E-7708-45AA-933B-828628120577",
+            "allocatedUnicastRange": [
+                {
+                    "lowAddress": "0001",
+                    "highAddress": "199A"
+                }
+            ],
+            "allocatedGroupRange": [
+                {
+                    "lowAddress": "C000",
+                    "highAddress": "CC9A"
+                }
+            ],
+            "allocatedSceneRange": [
+                {
+                    "firstScene": "0001",
+                    "lastScene": "3333"
+                }
+            ]
+        }
+    ],
+    "nodes": [
+        {
+            "UUID": "8BE6C84E-7708-45AA-933B-828628120577",
+            "name": "nRF Mesh Provisioner",
+            "deviceKey": "A36B6C4BD62EF47466A2EBB7584DC1A1",
+            "unicastAddress": "0001",
+            "security": "insecure",
+            "configComplete": false,
+            "features": {
+                "friend": 2,
+                "lowPower": 2,
+                "proxy": 2,
+                "relay": 2
+            },
+            "defaultTTL": 5,
+            "netKeys": [
+                {
+                    "index": 0,
+                    "updated": false
+                }
+            ],
+            "appKeys": [
+                {
+                    "index": 0,
+                    "updated": false
+                },
+                {
+                    "index": 1,
+                    "updated": false
+                },
+                {
+                    "index": 2,
+                    "updated": false
+                }
+            ],
+            "elements": [
+                {
+                    "name": "Element: 0x0001",
+                    "index": 0,
+                    "location": "0000",
+                    "models": [
+                        {
+                            "modelId": "0001",
+                            "bind": [],
+                            "subscribe": []
+                        }
+                    ]
+                }
+            ],
+            "excluded": false
+        }
+    ],
+    "groups": [],
+    "scenes": [],
+    "networkExclusions": [
+        {
+            "ivIndex": 0,
+            "addresses": []
+        }
+    ]
+}

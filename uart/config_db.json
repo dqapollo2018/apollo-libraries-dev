@@ -1,0 +1,10 @@
+{
+    "addrPublication": {},
+    "addrSubscription": {},
+    "deviceKey": {},
+    "config": {
+        "local unicast": "199A",
+        "netkey": "A0682F868AE1BD3835DD5D46AC808D70",
+        "appkey": "6296316B381256A2CD8B584F33D8ECD5"
+    }
+}

@@ -1,8 +1,6 @@
-# BLE SIGMESH PLUGIN
+# BLE SIGMESH LIBRARY
 
 # GIỚI THIỆU
-
-có thể chạy file test.py nhập data vào để test thư viện
 
 ## I. Tính năng
 
