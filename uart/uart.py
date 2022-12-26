@@ -1,13 +1,8 @@
-
+# coding:utf-8
 import random
-from re import I
 import time
-from distutils.log import error
-from importlib.util import set_loader
-from tkinter.messagebox import NO
 from deviceCommands import REQUEST, RESPONSE
 import json
-import threading
 from serial import Serial
 import logging
 import logging.config
@@ -22,6 +17,26 @@ url_sigMesh_db = "sigMesh_db.json"
 
 NUMBER_REPEAT = 10  # số lần gửi lại
 TIME_REPEAT = 0.2  # thời gian giữa các lần gửi s
+
+
+def readFile(url):
+    try:
+        with open(url, 'r', encoding='utf8') as json_file:
+            data = json.loads(json_file.read())
+        return data
+    except:
+        log.error("error read file: %s", url)
+
+
+def writeFile(url, data):
+    try:
+        with open(url, 'w', encoding='utf8') as json_file:
+            json.dump(data, json_file, ensure_ascii=False, indent=4)
+        # f = open(url, "w", encoding='utf8')
+        # f.write(json.dumps(data, indent=4))
+        # f.close()
+    except:
+        log.error("error write file: %s", url)
 
 
 class UART:
@@ -81,18 +96,14 @@ class UART:
             --> thêm thiết bị có uuid là "018071902600008CAEB1514719020000" với tên den2
         """
         self.prov_deviceName = name
-
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        data_sigMesh = readFile(url_sigMesh_db)
         unicast = 3
-
         for node in data_sigMesh["nodes"]:
             if node["name"] != self.prov_deviceName:
                 if int(node["unicastAddress"], base=16) >= unicast:
                     unicast = int(node["unicastAddress"], base=16)+1
             else:
-                log.error("thiết bị đã tồn tại")
+                # log.error("thiết bị đã tồn tại")
                 self.res_error = {self.tp: "add_device",
                                   self.pl: {"status": "01"}}
                 self.status_fb = True
@@ -111,13 +122,10 @@ class UART:
                     if int(unicast, base=16) <= umax:
                         unicast = umax+1
                         unicast = str("%0.4X" % unicast)
-                        # if node == unicast:
-                        #     unicast = int(node, base=16)+1
-                        #     unicast = str("%0.4X" % unicast)
 
         dat = {"context": 0, "netkey index": 0,
                "uuid": uuid, "address": unicast}
-        self.request("provisioning", json.dumps(dat))
+        self.request("provisioning", json.dumps(dat, ensure_ascii=False))
 
     def onoff_device(self, unicastAddress, status):
         """
@@ -127,8 +135,8 @@ class UART:
                     + False: off
                     + True: on
             ví dụ: 
-                onoff_device("0001",1) --> bật thiết bị có địa chỉ 0001
-                onoff_device("0001",0) --> tắt thiết bị có địa chỉ 0001
+                onoff_device("0001",True) --> bật thiết bị có địa chỉ 0001
+                onoff_device("0001",False) --> tắt thiết bị có địa chỉ 0001
         """
         if status:
             ttl = random.randrange(255)
@@ -139,7 +147,7 @@ class UART:
             ttl = str("%0.2X" % ttl)
             msg = "00"+ttl
         dat = {"address": unicastAddress, "opcode": "8202", "message": msg}
-        self.request("app_data", json.dumps(dat))
+        self.request("app_data", json.dumps(dat, ensure_ascii=False))
 
     def lightness_device(self, unicastAddress, value):
         """
@@ -156,18 +164,18 @@ class UART:
         msg = str("%0.4X" % int(val))
         msg1 = msg[2] + msg[3] + msg[0] + msg[1] + ttl
         dat = {"address": unicastAddress, "opcode": "824C", "message": msg1}
-        self.request("app_data", json.dumps(dat))
+        self.request("app_data", json.dumps(datensure_ascii=False))
 
     def onoff_group(self, unicastAddress, status):
         """
-            on/off thiết bị ble 
-                - unicastAddress(hex string 2 byte): địa chỉ thiết bị 
+            on/off nhóm thiết bị ble 
+                - unicastAddress(hex string 2 byte): địa chỉ group thiết bị 
                 - status(bool): trạng thái on/off 
                     + False: off
                     + True: on
             ví dụ: 
-                onoff_device("0001",1) --> bật thiết bị có địa chỉ 0001
-                onoff_device("0001",0) --> tắt thiết bị có địa chỉ 0001
+                onoff_device("C000",True) --> bật thiết bị có địa chỉ C000
+                onoff_device("C000",False) --> tắt thiết bị có địa chỉ C000
         """
         if status:
             ttl = random.randrange(255)
@@ -178,16 +186,16 @@ class UART:
             ttl = str("%0.2X" % ttl)
             msg = "00"+ttl
         dat = {"address": unicastAddress, "opcode": "8202", "message": msg}
-        self.request("app_data", json.dumps(dat))
+        self.request("app_data", json.dumps(dat, ensure_ascii=False))
 
     def lightness_group(self, unicastAddress, value):
         """
-            độ sáng đèn
-                - unicastAddress(hex string 2 byte): địa chỉ thiết bị 
+            độ sáng group đèn 
+                - unicastAddress(hex string 2 byte): địa chỉ group thiết bị 
                 - value(int): độ sáng đèn 0->100%
 
             ví dụ: 
-                lightness_device("0001",50) --> đèn 0001 sáng 50%
+                lightness_device("C000",50) -->group đèn C000 sáng 50%
         """
         val = value*65535/100
         ttl = random.randrange(255)
@@ -195,30 +203,42 @@ class UART:
         msg = str("%0.4X" % int(val))
         msg1 = msg[2] + msg[3] + msg[0] + msg[1] + ttl
         dat = {"address": unicastAddress, "opcode": "824C", "message": msg1}
-        self.request("app_data", json.dumps(dat))
+        self.request("app_data", json.dumps(dat, ensure_ascii=False))
 
     def bindKey(self, unicast):
         dat = {"unicast": unicast, "netkey index": "0000", "appkey index": "0000"}
         self.request(
-            "appkey_bind", json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+            "appkey_bind", json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
 
     def composition(self, unicast):
         dat = {"unicast": unicast}
         self.request(
-            "composition", json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+            "composition", json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
 
     def delete_network(self):
+        """
+            xóa mạng mesh tạo ra mạng mới, lệnh này không cần data
+        """
         self.request("mesh_clear", "")
 
     def delete_node(self, unicastAddress):
+        """
+        xóa node ra khỏi mạng:
+            - unicastAddress(String): địa chỉ node cần xóa
+        ví dụ: xóa đèn địa chỉ 0003
+            delete_node("0003")
+        """
         dat = {"unicast": unicastAddress}
-        # log.debug(dat)
-        self.request("delete_node", json.dumps(dat))
+        self.request("delete_node", json.dumps(dat, ensure_ascii=False))
 
     def creat_group(self, name):
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        """
+        Thêm group mới:
+            - name(String): tên group cần thêm
+        ví dụ: thêm group với tên Group 1
+            creat_group("Group 1")
+        """
+        data_sigMesh = readFile(url_sigMesh_db)
         unicast = "C000"
         int_unicast = int(unicast, base=16)
         group_list = []
@@ -230,12 +250,8 @@ class UART:
             else:
                 self.res_error = {self.tp: "creat_group",
                                   self.pl: {"status": "01"}}
-                # self.res_error[self.tp] = "creat_group"
-                # self.res_error[self.pl]["status"] = "01"
                 self.status_fb = True
-                log.error("group đã tồn tại")
                 return
-
         unicast = str("%0.4X" % int_unicast)
         dat = {
             "name": name,
@@ -244,29 +260,29 @@ class UART:
         }
         group_list.append(dat)
         data_sigMesh["groups"] = group_list
-        f = open(url_sigMesh_db, "w")
-        f.write(json.dumps(data_sigMesh, indent=4))
-        f.close()
+        writeFile(url_sigMesh_db, data_sigMesh)
         dat2 = {"address": unicast}
-        self.request("addr_publication_add", json.dumps(dat2))
+        self.request("addr_publication_add",
+                     json.dumps(dat2, ensure_ascii=False))
         self.res_error = {self.tp: "creat_group",
                           self.pl: {"status": "00", "name": name, "address": unicast}}
-        # self.res_error[self.tp] = "creat_group"
-        # self.res_error[self.pl]["status"] = "00"
-        # self.res_error[self.pl]["name"] = name
-        # self.res_error[self.pl]["address"] = unicast
         self.status_fb = True
 
     def add_group(self, address_device, address_group):
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        """
+        Thêm đèn vào group:
+            - address_device(String): địa chỉ đèn
+            - address_group(String): địa chỉ group
+
+        ví dụ: thêm đèn 0003 vào group C000
+            add_group("0003","C000")
+        """
+        data_sigMesh = readFile(url_sigMesh_db)
         self.models_device_sub = []
         for node in data_sigMesh["nodes"]:
             if node["unicastAddress"] == address_device:
                 for model in node["elements"][0]["models"]:
                     self.models_device_sub.append(model["modelId"])
-
         dat = {
             "unicast": address_device,
             "elementAddress": address_device,
@@ -277,18 +293,23 @@ class UART:
         self.models_device_sub_unicast = address_device
         self.models_device_sub_address_group = address_group
         self.handle = "config_subscribe_model_add"
-        self.request("config_subscribe_model_add", json.dumps(dat))
+        self.request("config_subscribe_model_add",
+                     json.dumps(dat, ensure_ascii=False))
 
     def remove_group(self, address_device, address_group):
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        """
+        Xóa thiết bị ra khỏi group:
+            - address_device(String): địa chỉ đèn
+            - address_group(String): địa chỉ group
+        ví dụ: xóa đèn 0003 ra khỏi group C000
+            remove_group("0003","C000")
+        """
+        data_sigMesh = readFile(url_sigMesh_db)
         self.models_device_sub_remove = []
         for node in data_sigMesh["nodes"]:
             if node["unicastAddress"] == address_device:
                 for model in node["elements"][0]["models"]:
                     self.models_device_sub_remove.append(model["modelId"])
-        # log.debug(self.models_device_sub_remove)
         if len(self.models_device_sub_remove) > 0:
             dat = {
                 "unicast": address_device,
@@ -300,13 +321,17 @@ class UART:
             self.models_device_sub_remove_unicast = address_device
             self.models_device_sub_remove_address_group = address_group
             self.handle = "config_subscribe_model_delete"
-            self.request("config_subscribe_model_delete", json.dumps(dat))
+            self.request("config_subscribe_model_delete",
+                         json.dumps(dat, ensure_ascii=False))
 
     def delete_group(self, addressGroup):
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
-
+        """
+        Xóa 1 group:
+            - addressGroup(String): địa chỉ group
+        ví dụ: xóa group C000
+            delete_group(C000)
+        """
+        data_sigMesh = readFile(url_sigMesh_db)
         group_list = []
         group_list = list(data_sigMesh["groups"]).copy()
         st = False
@@ -315,49 +340,38 @@ class UART:
                 st = True
                 address = group["address"]
                 group_list.remove(group)
-
         data_sigMesh["groups"] = group_list
-        f = open(url_sigMesh_db, "w")
-        f.write(json.dumps(data_sigMesh, indent=4))
-        f.close()
+        writeFile(url_sigMesh_db, data_sigMesh)
         self.res_error = {self.tp: "",
                           self.pl: {}}
         self.res_error[self.tp] = "delete_group"
         self.res_error[self.pl]["status"] = "01"
         if st:
             self.res_error[self.pl]["status"] = "00"
-
             dat = {"address": address}
             self.request("addr_publication_remove",
-                         json.dumps(dat))
+                         json.dumps(dat, ensure_ascii=False))
         self.status_fb = True
 
     def send_public(self):
-
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        data_sigMesh = readFile(url_sigMesh_db)
         self.handle = "send_public"
         self.addr_sendPublic = []
         for node in data_sigMesh["nodes"]:
             self.addr_sendPublic.append(node["unicastAddress"])
         for group in data_sigMesh["groups"]:
             self.addr_sendPublic.append(group["address"])
-
         del self.addr_sendPublic[0]
         if (len(self.addr_sendPublic) > 0):
             dat = {"address": self.addr_sendPublic[0]}
             self.request("addr_publication_add",
-                         json.dumps(dat))
+                         json.dumps(dat, ensure_ascii=False))
             del self.addr_sendPublic[0]
-
         else:
             self.send_deviceKey()
 
     def send_deviceKey(self):
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        data_sigMesh = readFile(url_sigMesh_db)
         self.handle = "send_deviceKey"
         self.addr_sendDeviceKey = []
         for node in data_sigMesh["nodes"]:
@@ -366,7 +380,6 @@ class UART:
                 "key": node["deviceKey"]
             }
             self.addr_sendDeviceKey.append(dat)
-        # log.debug(self.addr_sendDeviceKey)
         del self.addr_sendDeviceKey[0]
         if (len(self.addr_sendDeviceKey) > 0):
             for i in range(len(self.addr_sendDeviceKey)):
@@ -374,16 +387,15 @@ class UART:
                     dat = {"key": self.addr_sendDeviceKey[i]["key"],
                            "unicast": self.addr_sendDeviceKey[i]["addr"]}
                     self.request(
-                        "devkey_add", json.dumps(dat))
+                        "devkey_add", json.dumps(dat, ensure_ascii=False))
                     del self.addr_sendDeviceKey[i]
                     break
-                # else:
-                #     del self.addr_sendDeviceKey[0]
 
     def send_config(self):
-        f = open(url_sigMesh_db, "r")
-        data_sigMesh = json.loads(f.read())
-        f.close()
+        """
+        gửi lại thông tin network khi retart
+        """
+        data_sigMesh = readFile(url_sigMesh_db)
         localunicasst = data_sigMesh["provisioners"][0]["allocatedUnicastRange"][0]["highAddress"]
         nk = data_sigMesh["netKeys"][0]["key"]
         ak = data_sigMesh["appKeys"][0]["key"]
@@ -391,7 +403,7 @@ class UART:
             tp = "config"
             pl = {"local unicast": localunicasst,
                   "netkey": [nk], "appkey": [ak]}
-            self.request(tp, json.dumps(pl))
+            self.request(tp, json.dumps(pl, ensure_ascii=False))
         except:
             pass
 
@@ -404,7 +416,6 @@ class UART:
     def uartWrite(self, data):
         """send data to uart"""
         if data != None:
-            # log.info("send data to uart: %s", data)
             data = bytes.fromhex(data)
             self.serial.write(bytearray(data))
             self.serial.flush()
@@ -418,22 +429,17 @@ class UART:
                 pkt_len = tmp[0]
                 if (pkt_len > 1):
                     tmp += bytearray(self.serial.read(pkt_len))
-                    # log.debug(tmp)
                     return tmp
         except:
             log.error("error read uart")
-            # self.serial.close()
-            # exit(0)
 
     def request(self, topic, payload, num_repeat=0, timout=0):
         """data gửi qua uart"""
         try:
-            # log.info("request with: \n \t topic %s \n \t payload: %s", topic, payload)
             if topic == "mesh_clear":
                 data_w = dev_req.mesh_clear()
                 if data_w != None:
                     self.uartWrite(data_w)
-
             elif topic == "config":
                 try:
                     payload = json.loads(payload)
@@ -458,9 +464,7 @@ class UART:
                 try:
                     payload = json.loads(payload)
                     self.deleteNode_unicast = payload["unicast"]
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     addr_Handle = data_f["addrPublication"][self.deleteNode_unicast]
                     dev_Handle = data_f["deviceKey"][self.deleteNode_unicast]
                 except:
@@ -473,30 +477,21 @@ class UART:
                 data_w = dev_req.delete_node(addr_Handle, dev_Handle)
                 if data_w != None:
                     self.uartWrite(data_w)
-                    f = open(url_sigMesh_db, "r")
-                    data_sigMesh = json.loads(f.read())
-                    f.close()
-
+                    data_sigMesh = readFile(url_sigMesh_db)
                     networkExclusions = []
                     networkExclusions = list(
                         data_sigMesh["networkExclusions"][0]["addresses"]).copy()
                     if self.deleteNode_unicast not in networkExclusions:
                         networkExclusions.append(self.deleteNode_unicast)
                     data_sigMesh["networkExclusions"][0]["addresses"] = networkExclusions
-
                     dataNode = []
                     dataNode = list(data_sigMesh["nodes"]).copy()
-                    # log.debug(data_sigMesh["nodes"])
                     for node in data_sigMesh["nodes"]:
-                        # log.debug(node)
                         if node["unicastAddress"] == self.deleteNode_unicast:
                             dataNode.remove(node)
                             data_sigMesh["nodes"] = dataNode
                             break
-                    # log.debug(data_sigMesh["nodes"])
-                    f = open(url_sigMesh_db, "w")
-                    f.write(json.dumps(data_sigMesh, indent=4))
-                    f.close()
+                    writeFile(url_sigMesh_db, data_sigMesh)
 
             elif topic == "red_iv":
                 file = open(url_config_db)
@@ -507,22 +502,18 @@ class UART:
                     pre_Seqnum = data_json["Seqnum"]
                 except:
                     pre_Seqnum = 0
-
                 seqnum = int(pre_Seqnum) + 512
                 if (seqnum >= 0xFFFFFF00):
                     seqnum = 512
-
                 str_Seqnum = str("%0.8X" % seqnum)
                 try:
                     indexIV = data_json["indexIV"]
                 except:
                     indexIV = "00000000"
-
                 data_json["Seqnum"] = seqnum
                 file = open(url_config_db, 'w')
-                file.write(json.dumps(data_json, indent=4))
+                file.write(json.dumps(data_json, indent=4, ensure_ascii=False))
                 file.close()
-
                 data_w = dev_req.red_iv(indexIV, str_Seqnum)
                 if data_w != None:
                     self.uartWrite(data_w)
@@ -548,10 +539,7 @@ class UART:
                 try:
                     payload = json.loads(payload)
                     self.addr_subscription = payload['address']
-
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.addr_subscription_remove = data_f["addrSubscription"][self.addr_subscription]
                 except:
                     self.res_error = {self.tp: "",
@@ -567,7 +555,6 @@ class UART:
                 try:
                     payload = json.loads(payload)
                     self.addr_publication = payload['address']
-
                 except:
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
@@ -577,17 +564,12 @@ class UART:
                     return
                 data_w = dev_req.add_addrPublication(self.addr_publication)
                 self.uartWrite(data_w)
-
             elif topic == "addr_publication_remove":
                 try:
-
                     payload = json.loads(payload)
                     self.addr_publication = payload['address']
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.addr_publication_remove = data_f["addrPublication"][self.addr_publication]
-
                 except:
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
@@ -597,20 +579,15 @@ class UART:
                     return
                 self.uartWrite(dev_req.remove_addrPublication(
                     self.addr_publication_remove))
-
             elif topic == "app_data":
                 try:
                     payload = json.loads(payload)
-                    self.app_data_addr = payload['address']
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
-                    self.DST_Addr_Handle = data_f["addrPublication"][self.app_data_addr]
-
-                    self.opcode = payload['opcode']
-                    self.message = payload['message']
-
-                    data = self.opcode+self.message
+                    app_data_addr = payload['address']
+                    data_f = readFile(url_config_db)
+                    DST_Addr_Handle = data_f["addrPublication"][app_data_addr]
+                    opcode = payload['opcode']
+                    message = payload['message']
+                    data = opcode+message
                 except:
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
@@ -619,29 +596,23 @@ class UART:
                     self.status_fb = True
                     return
                 self.uartWrite(dev_req.send_meshPacket(
-                    self.DST_Addr_Handle, data))
-
+                    DST_Addr_Handle, data))
             elif topic == "scanStart":
                 self.uartWrite(dev_req.scanStart())
+
             elif topic == "scanStop":
                 self.uartWrite(dev_req.scanStop())
+
             elif topic == "provisioning":
-
                 try:
-
                     payload = json.loads(payload)
                     context = payload['context']
                     netkeyIndex = payload['netkey index']
                     uuid = payload['uuid']
                     address = payload['address']
-
-                    f = open(url_sigMesh_db, "r")
-                    data_sigMesh = json.loads(f.read())
-                    f.close()
-
+                    data_sigMesh = readFile(url_sigMesh_db)
                     data_sigMesh_nodes = []
                     data_sigMesh_nodes = list(data_sigMesh["nodes"]).copy()
-
                     data_sigMesh_nodes_prov = {
                         "UUID": uuid,
                         "name": self.prov_deviceName,
@@ -693,60 +664,9 @@ class UART:
                         "excluded": False
                     }
 
-                    # data_sigMesh_nodes_prov = {
-                    #     "appKeys": [
-                    #         {
-                    #             "index": "",
-                    #             "updated": False
-                    #         }
-                    #     ],
-                    #     "cid": "",
-                    #     "configComplete": True,
-                    #     "crpl": "",
-                    #     "deviceKey": "",
-                    #     "elements": [
-                    #             {
-                    #                 "index": "",
-                    #                 "location": "",
-                    #                 "models": [
-                    #                     {
-                    #                         "bind": [
-
-                    #                         ],
-                    #                         "modelId": "0000",
-                    #                         "subscribe": [
-
-                    #                         ]
-                    #                     }
-                    #                 ],
-                    #                 "name": "Primary Element"
-                    #             },
-
-                    #     ],
-                    #     "excluded": False,
-                    #     "features": {
-                    #         "friend": "",
-                    #         "lowPower": "",
-                    #         "proxy": "",
-                    #         "relay": ""
-                    #     },
-                    #     "name": self.prov_deviceName,
-                    #     "netKeys": [
-                    #         {
-                    #             "index": "",
-                    #             "updated": False
-                    #         }
-                    #     ],
-                    #     "security": "secure",
-                    #     "unicastAddress": address,
-                    #     "UUID": uuid
-                    # }
-
                     data_sigMesh_nodes.append(data_sigMesh_nodes_prov)
                     data_sigMesh["nodes"] = data_sigMesh_nodes
-                    f = open(url_sigMesh_db, "w")
-                    f.write(json.dumps(data_sigMesh, indent=4))
-                    f.close()
+                    writeFile(url_sigMesh_db, data_sigMesh)
                 except:
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
@@ -781,10 +701,7 @@ class UART:
                 try:
                     payload = json.loads(payload)
                     self.addr_devkey_remove = payload['address']
-
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.addr_devkeyHandle_remove = data_f["deviceKey"][self.addr_devkey_remove]
                 except:
                     self.res_error = {self.tp: "",
@@ -797,22 +714,18 @@ class UART:
                     self.addr_devkeyHandle_remove))
 
             elif topic == "appkey_bind":
-                # log.debug("send appkey_bind")
-
                 try:
                     payload = json.loads(payload)
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.appkey_bind_unicast = payload["unicast"]
-                    self.appkey_bind_netKeyIndex = payload['netkey index']
-                    self.appkey_bind_appKeyIndex = payload['appkey index']
-                    if (self.appkey_bind_appKeyIndex == "0000"):
-                        self.appkey_bind_appKey = data_f["config"]["appkey"]
+                    appkey_bind_netKeyIndex = payload['netkey index']
+                    appkey_bind_appKeyIndex = payload['appkey index']
+                    if (appkey_bind_appKeyIndex == "0000"):
+                        appkey_bind_appKey = data_f["config"]["appkey"]
                     else:
-                        self.appkey_bind_appKey = payload['appkey']
-                    self.appkey_bind_addrHandle = data_f["addrPublication"][self.appkey_bind_unicast]
-                    self.appkey_bind_addrDevkeyHandle = data_f["deviceKey"][self.appkey_bind_unicast]
+                        appkey_bind_appKey = payload['appkey']
+                    appkey_bind_addrHandle = data_f["addrPublication"][self.appkey_bind_unicast]
+                    appkey_bind_addrDevkeyHandle = data_f["deviceKey"][self.appkey_bind_unicast]
                 except Exception as e:
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
@@ -820,8 +733,8 @@ class UART:
                     self.res_error[self.pl]["status"] = "ERROR"
                     self.status_fb = True
                     return
-                data_w = dev_req.appkey_bind(self.appkey_bind_netKeyIndex, self.appkey_bind_appKeyIndex,
-                                             self.appkey_bind_appKey, self.appkey_bind_addrHandle, self.appkey_bind_addrDevkeyHandle)
+                data_w = dev_req.appkey_bind(appkey_bind_netKeyIndex, appkey_bind_appKeyIndex,
+                                             appkey_bind_appKey, appkey_bind_addrHandle, appkey_bind_addrDevkeyHandle)
                 if num_repeat > 0:
                     self.tpRepeat = "appkey_bind"
                     self.repeat = data_w
@@ -833,9 +746,7 @@ class UART:
             elif topic == "composition":
                 try:
                     payload = json.loads(payload)
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.composition_unicast = payload['unicast']
                     composition_addrHandle = data_f["addrPublication"][self.composition_unicast]
                     composition_addrDevkeyHandle = data_f["deviceKey"][self.composition_unicast]
@@ -858,47 +769,35 @@ class UART:
             elif topic == "devkey_add":
                 try:
                     payload = json.loads(payload)
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.devkey_add_unicast = payload['unicast']
-
-                    self.devkey_add_key = payload['key']
-                    self.devkey_add_addrHandle = data_f["addrPublication"][self.devkey_add_unicast]
+                    devkey_add_key = payload['key']
+                    devkey_add_addrHandle = data_f["addrPublication"][self.devkey_add_unicast]
                     self.uartWrite(dev_req.add_devkey(
-                        self.devkey_add_unicast, self.devkey_add_addrHandle, self.devkey_add_key))
+                        self.devkey_add_unicast, devkey_add_addrHandle, devkey_add_key))
                 except:
-                    # log.info("loi")
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
                     self.res_error[self.tp] = "devkey_add"
                     self.res_error[self.pl]["status"] = "ERROR"
-                    # log.error(payload)
                     self.status_fb = True
 
             elif topic == "config_subscribe_model_add":
                 try:
                     payload = json.loads(payload)
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
-                    self.config_subscribe_model_add_unicast = payload['unicast']
-                    self.config_subscribe_model_add_elementAddress = payload['elementAddress']
-                    self.config_subscribe_model_add_modelIdentifier = payload['modelIdentifier']
-                    # log.debug("sub model: %s",
-                    #           self.config_subscribe_model_add_modelIdentifier)
-                    self.config_subscribe_model_add_subscribeAddress = payload['subscribeAddress']
-
+                    data_f = readFile(url_config_db)
+                    config_subscribe_model_add_unicast = payload['unicast']
+                    config_subscribe_model_add_elementAddress = payload['elementAddress']
+                    config_subscribe_model_add_modelIdentifier = payload['modelIdentifier']
+                    config_subscribe_model_add_subscribeAddress = payload['subscribeAddress']
                     addrHandle = data_f[
-                        "addrPublication"][self.config_subscribe_model_add_unicast]
+                        "addrPublication"][config_subscribe_model_add_unicast]
                     devHandle = data_f[
-                        "deviceKey"][self.config_subscribe_model_add_unicast]
-
+                        "deviceKey"][config_subscribe_model_add_unicast]
                     data_w = dev_req.config_subscribe_model_add(addrHandle, devHandle,
-                                                                self.config_subscribe_model_add_elementAddress,
-                                                                self.config_subscribe_model_add_subscribeAddress,
-                                                                self.config_subscribe_model_add_modelIdentifier)
-                    # log.debug(data_w)
+                                                                config_subscribe_model_add_elementAddress,
+                                                                config_subscribe_model_add_subscribeAddress,
+                                                                config_subscribe_model_add_modelIdentifier)
                     if num_repeat > 0:
                         self.tpRepeat = "config_subscribe_model_add"
                         self.repeat = data_w
@@ -907,28 +806,20 @@ class UART:
                         self.time = time.time()
                     self.uartWrite(data_w)
                 except:
-                    # log.info("loi")
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
                     self.res_error[self.tp] = "config_subscribe_model_add"
                     self.res_error[self.pl]["status"] = "ERROR"
-                    # log.error(payload)
                     self.status_fb = True
-                    # return
 
             elif topic == "config_subscribe_model_delete":
                 try:
                     payload = json.loads(payload)
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     config_subscribe_model_delete_unicast = payload['unicast']
                     config_subscribe_model_delete_elementAddress = payload['elementAddress']
                     config_subscribe_model_delete_modelIdentifier = payload['modelIdentifier']
-                    # log.debug("delete model: %s",
-                    #           config_subscribe_model_delete_modelIdentifier)
                     config_subscribe_model_delete_subscribeAddress = payload['subscribeAddress']
-
                     addrHandle = data_f[
                         "addrPublication"][config_subscribe_model_delete_unicast]
                     devHandle = data_f[
@@ -938,7 +829,6 @@ class UART:
                                                                    config_subscribe_model_delete_elementAddress,
                                                                    config_subscribe_model_delete_subscribeAddress,
                                                                    config_subscribe_model_delete_modelIdentifier)
-                    # log.debug(data_w)
                     if num_repeat > 0:
                         self.tpRepeat = "config_subscribe_model_delete"
                         self.repeat = data_w
@@ -951,26 +841,18 @@ class UART:
                                       self.pl: {}}
                     self.res_error[self.tp] = "config_subscribe_model_delete"
                     self.res_error[self.pl]["status"] = "ERROR"
-                    # log.error(payload)
                     self.status_fb = True
-                    # return
 
             elif topic == "bind_key_model":
-
                 try:
                     payload = json.loads(payload)
-                    f = open(url_config_db, "r")
-                    data_f = json.loads(f.read())
-                    f.close()
+                    data_f = readFile(url_config_db)
                     self.bind_key_model_unicast = payload['unicast']
                     self.bind_key_model_elementAddress = payload['element address']
                     self.bind_key_model_modelIdentifier = payload['model identifier']
-                    # log.debug("bind %s - unicasst: %s",
-                    #           self.bind_key_model_modelIdentifier, self.bind_key_model_unicast)
-                    self.bind_key_model_appKeyIndex = payload['appKey index']
-
-                    self.bind_key_model_addrHandle = data_f["addrPublication"][self.bind_key_model_unicast]
-                    self.bind_key_model_deviceKeyHandle = data_f["deviceKey"][self.bind_key_model_unicast]
+                    bind_key_model_appKeyIndex = payload['appKey index']
+                    bind_key_model_addrHandle = data_f["addrPublication"][self.bind_key_model_unicast]
+                    bind_key_model_deviceKeyHandle = data_f["deviceKey"][self.bind_key_model_unicast]
                 except:
                     self.res_error = {self.tp: "",
                                       self.pl: {}}
@@ -979,7 +861,7 @@ class UART:
                     self.status_fb = True
                     return
                 data_w = dev_req.bind_key_model(
-                    self.bind_key_model_addrHandle, self.bind_key_model_deviceKeyHandle, self.bind_key_model_elementAddress, self.bind_key_model_appKeyIndex, self.bind_key_model_modelIdentifier)
+                    bind_key_model_addrHandle, bind_key_model_deviceKeyHandle, self.bind_key_model_elementAddress, bind_key_model_appKeyIndex, self.bind_key_model_modelIdentifier)
                 if num_repeat > 0:
                     self.tpRepeat = "bind_key_model"
                     self.repeat = data_w
@@ -1008,7 +890,7 @@ class UART:
 
         if self.status_fb:
             try:
-                self.res_error = json.dumps(self.res_error)
+                self.res_error = json.dumps(self.res_error, ensure_ascii=False)
             except:
                 pass
             self.status_fb = False
@@ -1024,14 +906,10 @@ class UART:
                         if self.tpRepeat == topic:
                             self.tpRepeat = None
                             self.num_repeat = 0
-                        # log.debug(tmps)
-
-                        # set network
                         if topic == "setKeypair":
                             self.set_keypair = tmps
                             self.uartWrite(
                                 dev_req.set_local_unicast(self.local_unicast))
-                            # log.debug(tmps)
                         elif topic == "setLocalUnicast":
                             self.set_localUnicast = tmps
                             self.uartWrite(
@@ -1063,16 +941,9 @@ class UART:
                                     ]
                                 }
                             }
-                            f = open(url_config_db, "r")
-                            data_f = json.loads(f.read())
-                            f.close()
-                            try:
-                                f = open(url_sigMesh_db, "r")
-                                data_sigMesh = json.loads(f.read())
-                                f.close()
-                            except:
-                                log.error("loi read url_sigMesh_db")
 
+                            data_f = readFile(url_config_db)
+                            data_sigMesh = readFile(url_sigMesh_db)
                             data_f["config"] = {
                                 "local unicast": "",
                                 "netkey": "",
@@ -1086,18 +957,10 @@ class UART:
                                     if self.set_appkey[self.pl]["status"] == "00":
                                         data_f["config"]["appkey"] = self.appkey
                                         data_sigMesh["appKeys"][0]["key"] = self.appkey
-                                        f = open(url_config_db, "w")
-                                        f.write(json.dumps(data_f, indent=4))
-                                        f.close()
-                                        f = open(url_sigMesh_db, "w")
-                                        f.write(json.dumps(
-                                            data_sigMesh, indent=4))
-                                        f.close()
+                                        writeFile(url_config_db, data_f)
+                                        writeFile(url_sigMesh_db, data_sigMesh)
                                         self.send_public()
 
-                            # return json.dumps(config)
-
-                        # add public addr
                         elif topic == "addr_publication_add":
                             if (self.handle == "provision"):
                                 if tmps[self.pl]["status"] == "00":
@@ -1105,17 +968,11 @@ class UART:
                                     self.prov_public_addrHandle = tmps[self.pl]["address"]
                                     self.addr_publication = self.prov_address
                                     self.devkey_add_unicast = self.prov_address
-
                                     self.uartWrite(dev_req.add_devkey(
                                         self.prov_address, self.prov_public_addrHandle, self.prov_deviceKey))
-                                    f = open(url_config_db, "r")
-                                    data_f = json.loads(f.read())
-                                    f.close()
-
+                                    data_f = readFile(url_config_db)
                                     data_f["addrPublication"][self.addr_publication] = tmps[self.pl]["address"]
-                                    f = open(url_config_db, "w")
-                                    f.write(json.dumps(data_f, indent=4))
-                                    f.close()
+                                    writeFile(url_config_db, data_f)
                                 else:
                                     self.handle = None
                                     fb = {
@@ -1125,77 +982,41 @@ class UART:
                                             "status": "03"
                                         }
                                     }
-                                    return json.dumps(fb)
+                                    return json.dumps(fb, ensure_ascii=False)
 
                             elif (self.handle == "send_public"):
-
-                                f = open(url_config_db, "r")
-                                data_f = json.loads(f.read())
-                                f.close()
+                                data_f = readFile(url_config_db)
                                 data_f["addrPublication"][self.addr_publication] = tmps[self.pl]["address"]
-                                f = open(url_config_db, "w")
-                                f.write(json.dumps(data_f, indent=4))
-                                f.close()
-
+                                writeFile(url_config_db, data_f)
                                 if (len(self.addr_sendPublic) > 0):
-
                                     dat = {"address": self.addr_sendPublic[0]}
                                     self.request("addr_publication_add",
-                                                 json.dumps(dat))
+                                                 json.dumps(dat, ensure_ascii=False))
                                     del self.addr_sendPublic[0]
                                 else:
                                     self.send_deviceKey()
-
-                                # return json.dumps(tmps)
-
                             else:
                                 if tmps[self.pl]["status"] == "00":
-
-                                    f = open(url_config_db, "r")
-                                    data_f = json.loads(f.read())
-                                    f.close()
-
+                                    data_f = readFile(url_config_db)
                                     data_f["addrPublication"][self.addr_publication] = tmps[self.pl]["address"]
-                                    f = open(url_config_db, "w")
-                                    f.write(json.dumps(data_f, indent=4))
-                                    f.close()
+                                    writeFile(url_config_db, data_f)
 
                         elif topic == "addr_publication_remove":
-                            f = open(url_config_db, "r")
-                            data_f = json.loads(f.read())
-                            f.close()
-
+                            data_f = readFile(url_config_db)
                             data_f["addrPublication"].pop(
                                 self.addr_publication)
-                            # data_f["addrPublication"][self.addr_publication] = tmps[self.pl]["address"]
-                            f = open(url_config_db, "w")
-                            f.write(json.dumps(data_f, indent=4))
-                            f.close()
-                            # return json.dumps(tmps)
+                            writeFile(url_config_db, data_f)
 
-                        # add subscript addr
                         elif topic == "addr_subscription_add":
-                            f = open(url_config_db, "r")
-                            data_f = json.loads(f.read())
-                            f.close()
-
+                            data_f = readFile(url_config_db)
                             data_f["addrSubscription"][self.addr_subscription] = tmps[self.pl]["address"]
-                            f = open(url_config_db, "w")
-                            f.write(json.dumps(data_f, indent=4))
-                            f.close()
+                            writeFile(url_config_db, data_f)
 
-                            # return json.dumps(tmps)
                         elif topic == "addr_subscription_remove":
-                            f = open(url_config_db, "r")
-                            data_f = json.loads(f.read())
-                            f.close()
-
+                            data_f = readFile(url_config_db)
                             data_f["addrSubscription"].pop(
                                 self.addr_subscription)
-                            f = open(url_config_db, "w")
-                            f.write(json.dumps(data_f, indent=4))
-                            f.close()
-                            # return json.dumps(tmps)
+                            writeFile(url_config_db, data_f)
 
                         # provitioning
                         elif topic == "provision":
@@ -1210,14 +1031,13 @@ class UART:
                                         "status": "01"
                                     }
                                 }
-                                return json.dumps(fb)
+                                return json.dumps(fb, ensure_ascii=False)
 
                         elif topic == "prov_capabilities":
                             self.prov_numElements = tmps[self.pl]["numElements"]
                             self.uartWrite(dev_req.prov_listen())
 
                         elif topic == "provListen":
-
                             self.uartWrite(dev_req.provisioningOOBUse(0))
 
                         elif topic == "ECDH_reponst":
@@ -1237,30 +1057,25 @@ class UART:
                             self.prov_deviceKey = tmps[self.pl]["deviceKey"]
                             self.prov_netKey = tmps[self.pl]["netKey"]
                             self.prov_address = tmps[self.pl]["address"]
-
                             self.uartWrite(
                                 dev_req.add_addrPublication(self.prov_address))
                         elif (topic == "devkey_add"):
                             if self.handle == "provision":
                                 if tmps[self.pl]["status"] == "00":
-                                    f = open(url_sigMesh_db, "r")
-                                    data_sigMesh = json.loads(f.read())
-                                    f.close()
+                                    data_sigMesh = readFile(url_sigMesh_db)
                                     data_sigMesh_nodes = []
                                     data_sigMesh_nodes = list(
                                         data_sigMesh["nodes"]).copy()
                                     data_sigMesh_nodes_adr = {}
                                     z = 0
                                     for x in data_sigMesh_nodes:
-
                                         if x["unicastAddress"] == self.devkey_add_unicast:
                                             data_sigMesh_nodes_adr = x
                                             break
                                         else:
                                             z = z+1
-                                    self.prov_devKey_status = tmps[self.pl]["status"]
-                                    # self.handle = None
-                                    self.prov_devkeyHandle = tmps[self.pl]["devkeyHandle"]
+                                    prov_devKey_status = tmps[self.pl]["status"]
+                                    prov_devkeyHandle = tmps[self.pl]["devkeyHandle"]
                                     provisioning = {
                                         self.tp: "provisioning",
                                         self.pl: {
@@ -1269,9 +1084,9 @@ class UART:
                                             "address": self.prov_address,
                                             "network key": self.prov_netKey,
                                             "device key": self.prov_deviceKey,
-                                            "devkey addr status": self.prov_devKey_status,
+                                            "devkey addr status": prov_devKey_status,
                                             "publish addr status": self.prov_public_status,
-                                            "devkey handle": self.prov_devkeyHandle,
+                                            "devkey handle": prov_devkeyHandle,
                                             "address handle": self.prov_public_addrHandle
                                         }
                                     }
@@ -1279,21 +1094,11 @@ class UART:
                                     data_sigMesh_nodes_adr["netKeys"][0]["index"] = 0
                                     data_sigMesh_nodes_adr["appKeys"][0]["index"] = 0
                                     data_sigMesh["nodes"][z] = data_sigMesh_nodes_adr
-                                    # log.debug(data_sigMesh)
-                                    f = open(url_sigMesh_db, "w")
-                                    f.write(json.dumps(
-                                        data_sigMesh, indent=4))
-                                    f.close()
-
-                                    if self.prov_devKey_status == "00":
-
-                                        f = open(url_config_db, "r")
-                                        data_f = json.loads(f.read())
-                                        f.close()
-                                        data_f["deviceKey"][self.prov_address] = self.prov_devkeyHandle
-                                        f = open(url_config_db, "w")
-                                        f.write(json.dumps(data_f, indent=4))
-                                        f.close()
+                                    writeFile(url_sigMesh_db, data_sigMesh)
+                                    if prov_devKey_status == "00":
+                                        data_f = readFile(url_config_db)
+                                        data_f["deviceKey"][self.prov_address] = prov_devkeyHandle
+                                        writeFile(url_config_db, data_f)
                                         return
                                 else:
                                     self.handle = None
@@ -1304,50 +1109,37 @@ class UART:
                                             "status": "04"
                                         }
                                     }
-                                    return json.dumps(fb)
+                                    return json.dumps(fb, ensure_ascii=False)
 
-                                # return json.dumps(provisioning)
                             elif self.handle == "send_deviceKey":
                                 if tmps[self.pl]["status"] == "00":
-                                    f = open(url_config_db, "r")
-                                    data_f = json.loads(f.read())
-                                    f.close()
+                                    data_f = readFile(url_config_db)
                                     data_f["deviceKey"][self.devkey_add_unicast] = tmps[self.pl]["devkeyHandle"]
-                                    f = open(url_config_db, "w")
-                                    f.write(json.dumps(data_f, indent=4))
-                                    f.close()
-
+                                    writeFile(url_config_db, data_f)
                                 if (len(self.addr_sendDeviceKey) > 0):
                                     for i in range(len(self.addr_sendDeviceKey)):
                                         if len(self.addr_sendDeviceKey[i]["key"]) == 32:
                                             dat = {"key": self.addr_sendDeviceKey[i]["key"],
                                                    "unicast": self.addr_sendDeviceKey[i]["addr"]}
                                             self.request(
-                                                "devkey_add", json.dumps(dat))
+                                                "devkey_add", json.dumps(dat, ensure_ascii=False))
                                             del self.addr_sendDeviceKey[i]
                                             break
-
                                 else:
                                     self.handle = None
                                     self.red_iv()
-                                # return json.dumps(tmps)
 
                         elif (topic == "provClosed"):
                             dat = {"unicast": self.prov_address,
                                    "netkey index": "0000", "appkey index": "0000"}
                             time.sleep(0.5)
                             self.request(
-                                "appkey_bind", json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+                                "appkey_bind", json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
 
                         elif (topic == "bind_key_model"):
-                            # log.debug(tmps)
                             payload = tmps[self.pl]
                             model = payload["model identifier"]
-                            # log.debug(self.list_model_bindkey)
-                            # log.debug(model)
                             del self.list_model_bindkey[0]
-                            # if model in self.list_model_bindkey:
-                            #     self.list_model_bindkey.remove(model)
                             if len(self.list_model_bindkey) > 0:
                                 dat = {
                                     "unicast": self.bind_key_model_unicast,
@@ -1356,7 +1148,7 @@ class UART:
                                     "appKey index": "0000"
                                 }
                                 self.request("bind_key_model", json.dumps(
-                                    dat), NUMBER_REPEAT, TIME_REPEAT)
+                                    dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
                             else:
                                 self.handle = None
                                 fb = {
@@ -1367,31 +1159,14 @@ class UART:
                                         "address": self.prov_address
                                     }
                                 }
-                                return json.dumps(fb)
-                            # if payload["model identifier"] == self.modelbind:
-
-                                # self.handle = None
-                                # fb = {
-                                #     self.tp: "add_device",
-                                #     self.pl: {
-                                #         "name": self.prov_deviceName,
-                                #         "status": "00",
-                                #         "address": self.prov_address
-                                #     }
-                                # }
-                                # return json.dumps(fb)
+                                return json.dumps(fb, ensure_ascii=False)
 
                         elif (topic == "devkey_delete"):
                             if (tmps[self.pl]["status"] == "00"):
-                                f = open(url_config_db, "r")
-                                data_f = json.loads(f.read())
-                                f.close()
+                                data_f = readFile(url_config_db)
                                 data_f["deviceKey"].pop(
                                     self.addr_devkey_remove)
-                                f = open(url_config_db, "w")
-                                f.write(json.dumps(data_f, indent=4))
-                                f.close()
-                            # return json.dumps(tmps)
+                                writeFile(url_config_db, data_f)
 
                         elif topic == "mesh_clear":
                             data_f = {
@@ -1400,10 +1175,7 @@ class UART:
                                 "deviceKey": {},
                                 "config": {}
                             }
-                            f = open(url_config_db, "w")
-                            f.write(json.dumps(data_f, indent=4))
-                            f.close()
-
+                            writeFile(url_config_db, data_f)
                             new_netkey = ""
                             for i in range(16):
                                 b = random.randrange(255)
@@ -1412,10 +1184,6 @@ class UART:
                             for i in range(16):
                                 b = random.randrange(255)
                                 new_appkey += str("%0.2X" % (b))
-                            # C8F9B27A755DAFAE731A25E8C70D296E
-                            # DA7DC6A2FB21A5586EB0A08C1BE7FCF3 nk
-                            # BF56D55C019D257FC28B6D67F1E40ED2 ak
-
                             data_sigMesh_clear = {
                                 "$schema": "http://json-schema.org/draft-04/schema#",
                                 "id": "http://www.bluetooth.com/specifications/assigned-numbers/mesh-profile/cdb-schema.json#",
@@ -1529,9 +1297,7 @@ class UART:
                                 ]
                             }
 
-                            f = open(url_sigMesh_db, "w")
-                            f.write(json.dumps(data_sigMesh_clear, indent=4))
-                            f.close()
+                            writeFile(url_sigMesh_db, data_sigMesh_clear)
                             self.send_config()
                             fb = {
                                 self.tp: "delete_network",
@@ -1540,9 +1306,7 @@ class UART:
                                     "status": "00"
                                 }
                             }
-                            return json.dumps(fb)
-
-                            # return json.dumps(tmps)
+                            return json.dumps(fb, ensure_ascii=False)
 
                         elif topic == "appkey_bind":
                             tmps[self.pl]["unicast"] = self.appkey_bind_unicast
@@ -1551,11 +1315,10 @@ class UART:
                                 self.num_repeat = 0
                             if self.handle == "provision":
                                 if tmps[self.pl]["status"] == "00":
-
                                     dat = {"unicast": "0000"}
                                     dat["unicast"] = self.appkey_bind_unicast
                                     self.request(
-                                        "composition", json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+                                        "composition", json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
                                 else:
                                     self.handle = None
                                     fb = {
@@ -1565,48 +1328,23 @@ class UART:
                                             "status": "05"
                                         }
                                     }
-                                    return json.dumps(fb)
+                                    return json.dumps(fb, ensure_ascii=False)
                             else:
                                 if tmps[self.pl]["status"] == "00":
-
                                     dat = {"unicast": "000C"}
                                     dat["unicast"] = self.appkey_bind_unicast
                                     self.request(
-                                        "composition", json.dumps(dat))
-                                return json.dumps(tmps)
+                                        "composition", json.dumps(dat, ensure_ascii=False))
+                                return json.dumps(tmps, ensure_ascii=False)
 
                         elif topic == "composition":
                             tmps[self.pl]["unicast"] = self.composition_unicast
                             payload = tmps[self.pl]
                             self.bind_key_model_unicast = payload["unicast"]
-                            try:
-                                f = open(url_config_db, "r")
-                                data_f = json.loads(f.read())
-                                f.close()
-                                self.bind_key_model_unicast = payload['unicast']
-
-                                self.bind_key_model_appKeyIndex = "0000"
-
-                                self.bind_key_model_addrHandle = data_f[
-                                    "addrPublication"][self.bind_key_model_unicast]
-                                self.bind_key_model_deviceKeyHandle = data_f[
-                                    "deviceKey"][self.bind_key_model_unicast]
-                            except:
-                                self.res_error = {self.tp: "",
-                                                  self.pl: {}}
-                                self.res_error[self.tp] = "bind_key_all_model"
-                                self.res_error[self.pl]["status"] = "ERROR"
-                                self.status_fb = True
-                                return
-
-                            # save file
-                            f = open(url_sigMesh_db, "r")
-                            data_sigMesh = json.loads(f.read())
-                            f.close()
+                            data_sigMesh = readFile(url_sigMesh_db)
                             data_sigMesh_nodes = []
                             data_sigMesh_nodes = list(
                                 data_sigMesh["nodes"]).copy()
-
                             data_sigMesh_nodes_adr = {}
                             z = 0
                             for x in data_sigMesh_nodes:
@@ -1615,22 +1353,16 @@ class UART:
                                     break
                                 else:
                                     z = z+1
-
                             data_sigMesh_nodes_adr["elements"] = payload["elements"]
                             l = 0
                             for x in payload["elements"]:
                                 self.bind_key_model_elementAddress = str("%0.4X" % (
                                     int(self.bind_key_model_unicast, 16) + x["index"]))
-                                # self.data_sigMesh_nodes_prov["appKeys"][0]["index"] = 0
                                 k = 0
                                 self.list_model_bindkey = []
                                 for y in x["models"]:
                                     self.list_model_bindkey.append(y)
                                     self.bind_key_model_modelIdentifier = y
-
-                                    # self.uartWrite(dev_req.bind_key_model(
-                                    #     self.bind_key_model_addrHandle, self.bind_key_model_deviceKeyHandle, self.bind_key_model_elementAddress, self.bind_key_model_appKeyIndex, self.bind_key_model_modelIdentifier))
-                                    # time.sleep(0.2)
                                     data_sigMesh_nodes_adr["elements"][l]["models"][k] = {
                                         "bind": [0],
                                         "modelId": y,
@@ -1639,22 +1371,16 @@ class UART:
                                     k = k+1
                                 self.modelbind = self.bind_key_model_modelIdentifier
                                 l = l+1
-
                             data_sigMesh_nodes_adr["cid"] = payload["cid"]
                             data_sigMesh_nodes_adr["pid"] = payload["pid"]
                             data_sigMesh_nodes_adr["vid"] = payload["vid"]
                             data_sigMesh_nodes_adr["crpl"] = payload["crpl"]
-
                             data_sigMesh_nodes_adr["features"]["friend"] = payload["friends"]
                             data_sigMesh_nodes_adr["features"]["lowPower"] = payload["low power"]
                             data_sigMesh_nodes_adr["features"]["proxy"] = payload["proxy"]
                             data_sigMesh_nodes_adr["features"]["relay"] = payload["relay"]
-
                             data_sigMesh["nodes"][z] = data_sigMesh_nodes_adr
-                            f = open(url_sigMesh_db, "w")
-                            f.write(json.dumps(
-                                data_sigMesh, indent=4))
-                            f.close()
+                            writeFile(url_sigMesh_db, data_sigMesh)
                             if len(self.list_model_bindkey) > 0:
                                 dat = {
                                     "unicast": self.bind_key_model_unicast,
@@ -1663,8 +1389,7 @@ class UART:
                                     "appKey index": "0000"
                                 }
                                 self.request("bind_key_model", json.dumps(
-                                    dat), NUMBER_REPEAT, TIME_REPEAT)
-                            # return json.dumps(tmps)
+                                    dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
 
                         elif (topic == "onOffStatus"):
                             payload = tmps[self.pl]
@@ -1685,11 +1410,10 @@ class UART:
                                     "status": status
                                 }
                             }
-                            return json.dumps(feedback)
+                            return json.dumps(feedback, ensure_ascii=False)
 
                         elif (topic == "lightnessStatus"):
                             payload = tmps[self.pl]
-
                             ln = int(tmps[self.pl]["p"], base=16)
                             ln = ln*100/65535
                             feedback = {
@@ -1699,52 +1423,37 @@ class UART:
                                     "value": round(ln)
                                 }
                             }
-                            return json.dumps(feedback)
+                            return json.dumps(feedback, ensure_ascii=False)
 
                         elif (topic == "iv_reponst"):
                             payload = tmps[self.pl]
-
                             iv_Index = payload["indexIV"]
-                            f = open(url_config_db, "r")
-                            data_f = json.loads(f.read())
-                            f.close()
-
+                            data_f = readFile(url_config_db)
                             data_f["indexIV"] = iv_Index
-                            f = open(url_config_db, "w")
-                            f.write(json.dumps(data_f, indent=4))
-                            f.close()
-
-                            # return json.dumps(tmps)
+                            writeFile(url_config_db, data_f)
 
                         elif (topic == "delete_node"):
-                            # log.debug("delete_node")
                             payload = tmps[self.pl]
-
                             dat = {"address": payload["unicast"]}
-                            self.request("devkey_delete", json.dumps(dat))
+                            self.request("devkey_delete", json.dumps(
+                                dat, ensure_ascii=False))
                             time.sleep(0.2)
                             self.request(
-                                "addr_publication_remove", json.dumps(dat))
-                            return json.dumps(tmps)
+                                "addr_publication_remove", json.dumps(dat, ensure_ascii=False))
+                            return json.dumps(tmps, ensure_ascii=False)
 
                         elif (topic == "config_subscribe_model_add"):
-                            # log.debug("config_subscribe_model_add")
                             if self.handle == "config_subscribe_model_delete":
                                 payload = tmps[self.pl]
-
                                 try:
-                                    f = open(url_sigMesh_db, "r")
-                                    data_sigMesh = json.loads(f.read())
-                                    f.close()
+                                    data_sigMesh = readFile(url_sigMesh_db)
                                     models_sub = []
                                     for node in data_sigMesh["nodes"]:
                                         if node["unicastAddress"] == payload["element address"]:
-                                            # log.debug(node)
                                             for model in node["elements"][0]["models"]:
                                                 if model["modelId"] == payload["model identifier"]:
                                                     index_node = list(
                                                         data_sigMesh["nodes"]).index(node)
-
                                                     index_model = list(
                                                         data_sigMesh["nodes"][index_node]["elements"][0]["models"]).index(model)
                                                     models_sub = list(
@@ -1754,13 +1463,9 @@ class UART:
                                                     data_sigMesh["nodes"][index_node]["elements"][0][
                                                         "models"][index_model]["subscribe"] = models_sub
                                                     break
-                                    f = open(url_sigMesh_db, "w")
-                                    f.write(json.dumps(
-                                        data_sigMesh, indent=4))
-                                    f.close()
+                                    writeFile(url_sigMesh_db, data_sigMesh)
                                 except:
                                     pass
-                                # log.debug(tmps)
                                 if (len(self.models_device_sub_remove) > 0):
                                     dat = {
                                         "unicast": self.models_device_sub_remove_unicast,
@@ -1769,19 +1474,15 @@ class UART:
                                         "subscribeAddress": self.models_device_sub_remove_address_group
                                     }
                                     self.request("config_subscribe_model_delete",
-                                                 json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+                                                 json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
                                     del self.models_device_sub_remove[0]
                                 else:
-                                    # log.debug("remove thanh công")
                                     self.res_error = {
                                         self.tp: "remove_group", self.pl: {"status": "00"}}
                                     self.status_fb = True
                                     if self.tpRepeat == "config_subscribe_model_delete":
                                         self.tpRepeat = None
-                                    # self.res_error[self.tp] = 'remove_group'
-                                    # self.res_error[self.pl]["status"] = "00"
-                                    # self.status_fb = True
-                                # return json.dumps(tmps)
+
                                 if payload["status"] != "00":
                                     if (len(self.models_device_sub_remove) > 0):
                                         dat = {
@@ -1791,25 +1492,19 @@ class UART:
                                             "subscribeAddress": self.models_device_sub_remove_address_group
                                         }
                                         self.request("config_subscribe_model_delete",
-                                                     json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+                                                     json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
                                         del self.models_device_sub_remove[0]
 
                             elif self.handle == "config_subscribe_model_add":
                                 payload = tmps[self.pl]
-                                # log.debug(tmps)
-
-                                f = open(url_sigMesh_db, "r")
-                                data_sigMesh = json.loads(f.read())
-                                f.close()
+                                data_sigMesh = readFile(url_sigMesh_db)
                                 models_sub = []
                                 for node in data_sigMesh["nodes"]:
                                     if node["unicastAddress"] == payload["element address"]:
-                                        # log.debug(node)
                                         for model in node["elements"][0]["models"]:
                                             if model["modelId"] == payload["model identifier"]:
                                                 index_node = list(
                                                     data_sigMesh["nodes"]).index(node)
-
                                                 index_model = list(
                                                     data_sigMesh["nodes"][index_node]["elements"][0]["models"]).index(model)
                                                 models_sub = list(
@@ -1821,12 +1516,7 @@ class UART:
                                                     data_sigMesh["nodes"][index_node]["elements"][0][
                                                         "models"][index_model]["subscribe"] = models_sub
                                                 break
-
-                                f = open(url_sigMesh_db, "w")
-                                f.write(json.dumps(
-                                    data_sigMesh, indent=4))
-                                f.close()
-                                # log.debug(tmps)
+                                writeFile(url_sigMesh_db, data_sigMesh)
                                 if (len(self.models_device_sub) > 0):
                                     dat = {
                                         "unicast": self.models_device_sub_unicast,
@@ -1836,18 +1526,14 @@ class UART:
                                     }
                                     time.sleep(0.2)
                                     self.request("config_subscribe_model_add",
-                                                 json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+                                                 json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
                                     del self.models_device_sub[0]
                                 else:
-                                    # self.res_error[self.tp] = 'add_group'
-                                    # self.res_error[self.pl]["status"] = "00"
-                                    # log.debug("add thanh công")
                                     self.res_error = {
                                         self.tp: "add_group", self.pl: {"status": "00"}}
                                     self.status_fb = True
                                     if self.tpRepeat == "config_subscribe_model_add":
                                         self.tpRepeat = None
-
                                 if payload["status"] != "00":
                                     if (len(self.models_device_sub) > 0):
                                         dat = {
@@ -1858,15 +1544,13 @@ class UART:
                                         }
                                         time.sleep(0.2)
                                         self.request("config_subscribe_model_add",
-                                                     json.dumps(dat), NUMBER_REPEAT, TIME_REPEAT)
+                                                     json.dumps(dat, ensure_ascii=False), NUMBER_REPEAT, TIME_REPEAT)
                                         del self.models_device_sub[0]
-                                    return json.dumps(tmps)
-
+                                    return json.dumps(tmps, ensure_ascii=False)
                         elif (topic == "red_iv"):
                             pass
                         else:
-
-                            return json.dumps(tmps)
+                            return json.dumps(tmps, ensure_ascii=False)
                     except:
                         log.error("error part json reponse: %s",
-                                  json.dumps(tmps))
+                                  json.dumps(tmps, ensure_ascii=False))
