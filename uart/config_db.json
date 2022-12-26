@@ -3,7 +3,7 @@
     "addrSubscription": {},
     "deviceKey": {},
     "config": {
-        "local unicast": "199B",
+        "local unicast": "199A",
         "netkey": "A36414F7FB706BF7C9D523BC6ABB6963",
         "appkey": "26B3599D191CF3083E06D3EB8F2DF3CB"
     }
