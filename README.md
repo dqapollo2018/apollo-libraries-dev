@@ -39,6 +39,10 @@ Các hàm thư viện hỗ trợ:
 
 ## II. CÁCH SỬ DỤNG
 
+    chạy lệnh dưới để cài đặt các thư viện cần thiết:
+
+`pip3 install -r requirements.txt`
+
     Bước 1: import thư viện với tên uart
 
 vd: `from uart import UART`
